@@ -111,7 +111,7 @@ function frame(children, { dark = false } = {}) {
         h('button', { onclick: async (e) => { await busy(e.currentTarget, async () => { await P.reset(); try { localStorage.removeItem(introKey()); } catch {} await load(); }); } }, 'Baştan başlat'),
         h('button', { onclick: () => { location.href = `hazirla.html#${testId}`; } }, 'Düzenlemeye dön'))));
   }
-  if (P && P.demo) {
+  if (P && P.demo && !params.has('gomulu')) {
     app.appendChild(h('div', { class: 'test-bar' },
       h('span', null, 'Örnek yolculuk · gerçek bir sürprizin nasıl göründüğünü dene'),
       h('button', { onclick: () => { location.href = 'index.html'; } }, 'Ana sayfa')));

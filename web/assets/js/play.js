@@ -6,6 +6,7 @@ import { installErrorReporting, installOfflineBanner, inAppBrowser, openInBrowse
 import { audioPlayer } from './media.js';
 import { getPosition } from './map.js';
 import { demoProvider } from './demo.js';
+import { typeText, heartbeat, musicStart, musicStop, musicToggle, sleep } from './cinema.js';
 
 installErrorReporting('play');
 installOfflineBanner();
@@ -193,18 +194,53 @@ function screenNotStarted() {
 }
 
 function screenIntro() {
-  frame([
-    h('div', { class: 'envelope reveal' },
-      h('div', { class: 'seal' }, icon('heart', 40)),
+  // 1. sahne: karanlıkta mühürlü bir zarf. Dokununca mühür kırılır, müzik başlar.
+  const hint = h('p', { class: 'seal-hint' }, 'Açmak için mühre dokun');
+  const seal = h('button', { class: 'wax', type: 'button', 'aria-label': 'Mührü kır ve aç' }, icon('heart', 34));
+  const env = h('div', { class: 'env-card' },
+    h('div', { class: 'env-flap' }),
+    h('div', { class: 'env-to' },
+      h('span', { class: 'env-small' }, S.sender_name ? fromName(S.sender_name) : 'Sana'),
+      h('span', { class: 'env-name' }, S.recipient_name || '')),
+    seal);
+  frame([h('div', { class: 'cine' }, h('p', { class: 'cine-kicker' }, 'Sana özel bir şey var'), env, hint)], { dark: true });
+  let opened = false;
+  const open = async () => {
+    if (opened) return; opened = true;
+    musicStart();
+    vibrate(30);
+    env.classList.add('opening');
+    hint.textContent = '';
+    await sleep(1500);
+    screenLetter();
+  };
+  seal.addEventListener('click', open);
+  env.addEventListener('click', open);
+}
+
+async function screenLetter() {
+  // 2. sahne: mektup harf harf yazılır
+  const hello = h('h1', { class: 'hello' });
+  const intro = h('p', { class: 'intro-text' });
+  const go = h('button', { class: 'btn primary', style: { minWidth: '220px' }, onclick: () => { sessionFlag(introKey(), true); musicStop(2.5); screenStop(); } }, 'Yolculuğa başla', icon('arrow'));
+  const foot = h('div', { class: 'letter-foot' }, h('p', { class: 'tiny' }, `${S.total} durak seni bekliyor. Telefonun şarjlı, internetin açık olsun.`), go);
+  foot.hidden = true;
+  const main = frame([
+    musicToggle(h, icon),
+    h('div', { class: 'envelope letter' },
       S.sender_name ? h('p', { class: 'from' }, `${fromName(S.sender_name)} sana`) : null,
-      h('h1', { class: 'hello' }, `${S.recipient_name}, sana bir şey hazırladım.`),
-      S.intro_message ? h('p', { class: 'intro-text' }, S.intro_message) : null,
-      h('p', { class: 'tiny' }, `${S.total} durak seni bekliyor. Telefonun şarjlı, internetin açık olsun.`),
-      h('button', { class: 'btn primary', style: { minWidth: '220px' }, onclick: () => { sessionFlag(introKey(), true); screenStop(); } }, 'Yolculuğa başla', icon('arrow'))),
+      hello, intro, foot),
   ]);
+  await typeText(hello, `${S.recipient_name}, sana bir şey hazırladım.`, { speed: 55, skipOn: main });
+  await sleep(500);
+  await typeText(intro, S.intro_message || '', { speed: 32, skipOn: main });
+  await sleep(400);
+  foot.hidden = false;
+  foot.classList.add('reveal');
 }
 
 function screenStop() {
+  musicStop(1.5);
   const c = S.current;
   if (!c) return screenFinal(false);
   lastDistance = null;
@@ -342,19 +378,44 @@ function screenReveal(newState) {
   ]);
 }
 
-function screenFinal(fresh) {
+async function screenFinal(fresh) {
   const f = S.final || {};
-  frame([
-    h('div', { class: 'reveal', style: { animationDuration: fresh ? '1.2s' : '.5s' } },
-      h('p', { class: 'play-step center', style: { color: '#e9a9b8' } }, 'Son durak'),
-      h('h1', { class: 'final-title' }, f.title || 'Sürpriz!'),
-      photo(f.photo_path, 'Son sürpriz'),
-      f.message ? h('p', { class: 'memory-text' }, f.message) : null,
-      f.audio_path ? h('div', { style: { margin: '16px 0' } }, audioPlayer(P.mediaUrl(f.audio_path), 'Son mesajı dinle').el) : null,
-      h('div', { class: 'stack', style: { marginTop: '26px', textAlign: 'center' } },
-        h('button', { class: 'btn primary block', onclick: () => screenStory(false) }, 'Hikâyemizi gör'),
-        P.test ? h('a', { class: 'btn ghost block', href: `hazirla.html#${testId}` }, 'Düzenlemeye dön') : null)),
+  const title = h('h1', { class: 'final-title' });
+  const photoBox = h('div', { class: 'final-photo' }, photo(f.photo_path, 'Son sürpriz'));
+  const msg = h('p', { class: 'memory-text' });
+  const audio = f.audio_path ? h('div', { style: { margin: '16px 0' } }, audioPlayer(P.mediaUrl(f.audio_path), 'Son mesajı dinle').el) : null;
+  const actions = h('div', { class: 'stack', style: { marginTop: '26px', textAlign: 'center' } },
+    h('button', { class: 'btn primary block', onclick: () => { musicStop(1); screenStory(false); } }, 'Hikâyemizi gör'),
+    P.test ? h('a', { class: 'btn ghost block', href: `hazirla.html#${testId}` }, 'Düzenlemeye dön') : null);
+  const kicker = h('p', { class: 'play-step center', style: { color: '#e9a9b8' } }, 'Son durak');
+  const main = frame([
+    musicToggle(h, icon),
+    h('div', { class: 'final-wrap' }, kicker, title, photoBox, msg, audio, actions),
   ], { dark: true });
+  const t = f.title || 'Sürpriz!';
+  if (!fresh) {
+    title.textContent = t; msg.textContent = f.message || '';
+    return;
+  }
+  // Son sahne: karanlık, kalp atışı, başlık harf harf parlar, sonra fotoğraf ve mesaj.
+  for (const el of [kicker, photoBox, audio, actions]) if (el) el.classList.add('hold');
+  main.classList.add('final-dark');
+  musicStart();
+  const pulse = h('div', { class: 'heart-pulse' }, icon('heart', 46));
+  main.prepend(pulse);
+  heartbeat(2);
+  await sleep(2400);
+  pulse.remove();
+  main.classList.remove('final-dark');
+  title.replaceChildren(...[...t].map((ch, i) => h('span', { class: 'glyph', style: { animationDelay: `${i * 0.09}s` } }, ch)));
+  await sleep(t.length * 90 + 1400);
+  kicker.classList.remove('hold');
+  photoBox.classList.remove('hold');
+  await sleep(900);
+  await typeText(msg, f.message || '', { speed: 40, skipOn: main });
+  if (audio) audio.classList.remove('hold');
+  await sleep(500);
+  actions.classList.remove('hold');
 }
 
 function screenStory(partial) {

@@ -1,7 +1,7 @@
 // Sürprizi hazırlayan kişinin ekranı (hazirla.html)
 import { CONFIG } from './config.js';
 import { db, storage, ensureAnonymousSession, ApiError } from './sb.js';
-import { h, $, clear, icon, toast, confirmBox, openSheet, copyText, whatsappLink, fmtDateTime, fmtShort, debounce, busy, field, toName } from './ui.js';
+import { h, $, clear, icon, toast, confirmBox, openSheet, copyText, whatsappLink, fmtDateTime, fmtShort, debounce, busy, field, toName, vibrate } from './ui.js';
 import { installErrorReporting, installOfflineBanner, inAppBrowser, openInBrowserHint } from './env.js';
 import { compressImage, createRecorder, canRecord, audioPlayer, extForMime, baseMime } from './media.js';
 import { createPicker, parseCoords, searchPlaces, getPosition } from './map.js';
@@ -251,7 +251,9 @@ function renderEditor() {
         h('div', null, h('p', { class: 'eyebrow', style: { marginBottom: '4px' } }, TEMPLATES[J.template]?.title || 'Yolculuk'),
           h('h1', { style: { fontSize: '30px' } }, J.recipient_name ? `${J.recipient_name} için` : 'Yolculuğun')),
         h('span', { class: `pill ${cls}` }, lbl, J.plan ? ` · ${PLAN_LABEL[J.plan]}` : '')),
-      J.status === 'active' ? h('div', { class: 'note ok', style: { margin: '6px 0 14px' } }, icon('check'), h('span', null, 'Gönderildi. Yaptığın değişiklikler alıcıya hemen yansır. Alıcı yolculuktayken durakların sırasını değiştirmemeni öneririz.')) : null,
+      J.status === 'active' ? h('div', { class: 'live-cta' },
+        h('div', null, h('strong', null, 'Gönderildi'), h('p', { class: 'small', style: { margin: '2px 0 0' } }, `${J.recipient_name || 'Alıcı'} yolculuğa çıkınca hangi durakta olduğunu buradan canlı izle.`)),
+        h('button', { class: 'btn primary', 'data-live': '1', onclick: openLive }, h('span', { class: 'live-dot' }), 'Canlı takip')) : null,
       ro ? h('div', { class: 'note', style: { margin: '6px 0 14px' } }, icon('lock'), h('span', null, 'Bu yolculuk tamamlandı, artık değiştirilemez.')) : null,
 
       h('section', { class: 'card' }, h('h2', { class: 'card-title' }, icon('heart'), 'Başlangıç'), sender.el, recip.el, intro.el),
@@ -634,6 +636,78 @@ function showEditLinkSheet(welcome) {
       h('a', { class: 'btn wa small', href: whatsappLink(`İlk Durak düzenleme bağlantım (kimseyle paylaşma): ${link}`), target: '_blank', rel: 'noopener' }, icon('whatsapp', 18), 'Kendime WhatsApp\'tan gönder'))));
 }
 
+
+// ───────────────────────── canlı takip ─────────────────────────
+// Alıcının konumu izlenmez; sadece hangi durakta olduğu ve sayfaya en son ne zaman baktığı görünür.
+function chime() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext; const c = new AC();
+    [784, 988, 1319].forEach((f, i) => {
+      const o = c.createOscillator(), g = c.createGain(), t = c.currentTime + i * 0.18;
+      o.frequency.value = f; o.type = 'sine'; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+      o.connect(g).connect(c.destination); o.start(t); o.stop(t + 1);
+    });
+  } catch { /* yok */ }
+}
+function agoText(seen, now) {
+  if (!seen) return null;
+  const s = Math.max(0, (new Date(now) - new Date(seen)) / 1000);
+  if (s < 75) return 'şu an ekrana bakıyor';
+  if (s < 3600) return `${Math.round(s / 60)} dk önce baktı`;
+  return `${fmtShort(seen)} tarihinde baktı`;
+}
+function openLive() {
+  const name = J.recipient_name || 'Alıcı';
+  const head = h('div', { class: 'live-head' });
+  const list = h('ol', { class: 'live-list' });
+  const alertBox = h('div', { 'aria-live': 'assertive' });
+  const foot = h('p', { class: 'tiny center', style: { marginTop: '14px' } }, 'Bu ekran açık kaldıkça her birkaç saniyede bir güncellenir. Son durağa gelince sesli uyarı verir.');
+  const body = h('div', null, alertBox, head, list, foot);
+  let timer = null, lock = null, lastPos = null, alerted = false, done = false;
+  const sheet = openSheet(`${name} nerede?`, body, { onClose: () => { clearTimeout(timer); try { lock && lock.release(); } catch { /* yok */ } document.title = 'Hazırla — İlk Durak'; } });
+  try { navigator.wakeLock && navigator.wakeLock.request('screen').then((l) => { lock = l; }).catch(() => {}); } catch { /* yok */ }
+  const draw = (st) => {
+    const total = st.total || STOPS.length, pos = st.position || 0;
+    const completed = st.status === 'completed';
+    const ago = agoText(st.seen_at, st.now);
+    head.replaceChildren(
+      h('div', { class: `live-state${completed ? ' done' : st.started_at ? ' on' : ''}` },
+        h('span', { class: 'live-dot' }),
+        h('strong', null, completed ? `${name} yolculuğu tamamladı` : st.started_at ? `${name} yolculukta: ${pos}/${total} durak açıldı` : `${name} bağlantıyı henüz açmadı`)),
+      ago ? h('p', { class: 'small muted', style: { margin: '6px 0 0' } }, ago) : null);
+    clear(list);
+    STOPS.forEach((s, i) => {
+      const state = i < pos ? 'done' : (i === pos && st.started_at && !completed ? 'cur' : '');
+      const skipped = (st.skipped || []).includes(s.position);
+      list.appendChild(h('li', { class: state },
+        h('span', { class: 'live-pin' }, state === 'done' ? icon('check', 16) : String(s.position)),
+        h('div', null,
+          h('strong', null, s.place_label || `Durak ${s.position}`),
+          h('p', { class: 'tiny', style: { margin: '2px 0 0' } },
+            state === 'done' ? (skipped ? 'Açıldı (ipucuyla geçti)' : 'Açıldı') : state === 'cur' ? 'Şu an bu durağın ipucunu okuyor' : 'Bekliyor'))));
+    });
+    list.appendChild(h('li', { class: completed ? 'done final' : (pos >= total && !completed ? 'cur' : 'final') },
+      h('span', { class: 'live-pin' }, icon('heart', 16)),
+      h('div', null, h('strong', null, J.final_title || 'Son sürpriz'), h('p', { class: 'tiny', style: { margin: '2px 0 0' } }, completed ? 'Son sürprizi gördü' : 'Sen'))));
+    const lastStopNow = st.started_at && !completed && total > 0 && pos === total - 1;
+    if (lastStopNow && !alerted) {
+      alerted = true; chime(); vibrate([200, 100, 200, 100, 400]);
+      document.title = `🔔 ${name} son durakta!`;
+    }
+    alertBox.replaceChildren(lastStopNow
+      ? h('div', { class: 'live-alert' }, h('strong', null, 'Son durağa geldi!'), h('span', null, `${name} son ipucunu okuyor. Yerini al; "${J.final_title || 'Sürpriz'}" yazısı birazdan onun ekranında belirecek.`))
+      : completed && !done ? h('div', { class: 'live-alert done' }, h('strong', null, 'Tamamlandı'), h('span', null, `${name} son sürprizi gördü.`)) : '');
+    if (completed && !done) { done = true; if (lastPos !== null && lastPos < total) { chime(); vibrate([300]); } }
+    if (lastPos !== null && pos > lastPos && !lastStopNow && !completed) vibrate(60);
+    lastPos = pos;
+  };
+  const poll = async () => {
+    try { draw(await db.rpc('ilk_my_status', { p_journey: J.id })); } catch (e) { head.replaceChildren(h('p', { class: 'note warn' }, e.message)); }
+    if (sheet.sheet.isConnected) timer = setTimeout(poll, document.hidden ? 15000 : 6000);
+  };
+  poll();
+}
+
 // ───────────────────────── gönder / paylaş ─────────────────────────
 async function openSend() {
   flush.flush();
@@ -755,7 +829,7 @@ async function openShare() {
     const txt = st.status === 'completed' ? `${name} yolculuğu tamamladı.`
       : st.started_at ? `${name} yolculukta: ${st.position}/${st.total} durak açıldı.`
         : 'Alıcı bağlantıyı henüz açmadı.';
-    status.replaceChildren(h('div', { class: `note ${st.status === 'completed' ? 'rose' : st.started_at ? 'ok' : ''}` }, icon(st.status === 'completed' ? 'heart' : 'clock'), h('span', null, txt)));
+    status.replaceChildren(h('div', { class: `note ${st.status === 'completed' ? 'rose' : st.started_at ? 'ok' : ''}` }, icon(st.status === 'completed' ? 'heart' : 'clock'), h('span', { class: 'grow' }, txt), h('button', { class: 'link-btn', onclick: openLive }, 'Canlı takip')));
   } catch { status.replaceChildren(''); }
 }
 

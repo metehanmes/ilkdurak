@@ -54,6 +54,16 @@ def close_sheet(page):
 def toast_has(page, text):
     expect(page.locator('.toast', has_text=text).last).to_be_visible(timeout=8000)
 
+def open_letter(pg, hello, frm=None):
+    """Mühürlü zarfı açar, daktilo yazısını dokunarak hızlandırır."""
+    pg.locator('.wax').click(force=True)
+    expect(pg.locator('h1.hello')).to_be_visible(timeout=10000)
+    for _ in range(30):
+        if pg.locator('button', has_text='Yolculuğa başla').is_visible(): break
+        pg.locator('main.play').click(position={'x': 8, 'y': 8}); pg.wait_for_timeout(250)
+    expect(pg.locator('h1.hello')).to_contain_text(hello)
+    if frm: expect(pg.locator('.from')).to_have_text(frm)
+
 def psql(sql):
     return subprocess.check_output(['su', 'postgres', '-c', f'psql -h /tmp -p 5433 -d ilkdurak -tAc "{sql}"']).decode().strip()
 
@@ -76,8 +86,9 @@ with sync_playwright() as pw:
 
     step('Örnek yolculuk baştan sona')
     p.click('text=Örneği dene')
-    expect(p.locator('h1.hello')).to_contain_text('Ece, sana bir şey hazırladım')
-    expect(p.locator('.from')).to_have_text("Mert'ten sana")
+    expect(p.locator('.env-name')).to_have_text('Ece')
+    shot(p, '02a-demo-envelope')
+    open_letter(p, 'Ece, sana bir şey hazırladım', "Mert'ten sana")
     shot(p, '02-demo-intro')
     p.click('text=Yolculuğa başla')
     p.fill('input.input-big', 'kahve'); p.click('text=Cevapla')
@@ -92,7 +103,7 @@ with sync_playwright() as pw:
     p.click('text=Sonraki ipucu')
     p.click('text=Vardım')
     p.click('text=Son sürprize geç')
-    expect(p.locator('h1.final-title')).to_have_text('Arkana dön')
+    expect(p.locator('h1.final-title')).to_have_text('Arkana dön', timeout=15000)
     shot(p, '04-demo-final')
     p.click('text=Hikâyemizi gör'); expect(p.locator('.story li')).to_have_count(3)
     ctx.close()
@@ -218,7 +229,7 @@ with sync_playwright() as pw:
     c.click('text=Dene')
     c.wait_for_url('**/s.html?deneme=*')
     expect(c.locator('.test-bar')).to_contain_text('Deneme modu')
-    expect(c.locator('.from')).to_have_text("Mete'den sana")
+    open_letter(c, 'Elif, sana bir şey hazırladım', "Mete'den sana")
     c.click('text=Yolculuğa başla')
     c.fill('input.input-big', 'demli cay'); c.click('text=Cevapla')
     expect(c.locator('.play-step')).to_contain_text('Durak 1 açıldı')
@@ -236,7 +247,7 @@ with sync_playwright() as pw:
     c.fill('input.input-big', 'ilkopucuk'); c.click('text=Kodu gir')
     expect(c.locator('.play-step')).to_contain_text('Durak 3 açıldı')
     c.click('text=Sonraki ipucu'); c.click('text=Vardım'); c.click('text=Son sürprize geç')
-    expect(c.locator('h1.final-title')).to_have_text('Arkana dön')
+    expect(c.locator('h1.final-title')).to_have_text('Arkana dön', timeout=15000)
     step('Deneme bitti: gerçek yolculuk hâlâ taslak, ilerleme ayrı')
     assert psql(f"select status from ilk_journeys where id='{journey_id}'") == 'draft'
     assert psql(f"select count(*) from ilk_progress where journey_id='{journey_id}' and mode='real'") == '0'
@@ -285,7 +296,9 @@ with sync_playwright() as pw:
     r = rctx.new_page(); watch(r, 'recipient')
     token = play_link.split('#')[1]
     r.goto(f'{WEB}/s.html?api={API}#{token}')
-    expect(r.locator('h1.hello')).to_contain_text('Elif, sana bir şey hazırladım')
+    expect(r.locator('.env-name')).to_have_text('Elif')
+    shot(r, '15a-recipient-envelope')
+    open_letter(r, 'Elif, sana bir şey hazırladım')
     shot(r, '15-recipient-intro')
     r.click('text=Yolculuğa başla')
     for w in ['kahve', 'su', 'ayran']:
@@ -310,8 +323,17 @@ with sync_playwright() as pw:
     expect(c.locator('.sheet-wrap').last).to_contain_text('2/4 durak açıldı')
     close_sheet(c)
     r.fill('input.input-big', 'ILK-OPUCUK'); r.click('text=Kodu gir')
-    r.click('text=Sonraki ipucu'); r.click('text=Vardım'); r.click('text=Son sürprize geç')
-    expect(r.locator('h1.final-title')).to_have_text('Arkana dön')
+    r.click('text=Sonraki ipucu')
+    step('Canlı takip: son durağa gelince hazırlayana uyarı')
+    c.locator('[data-live]').click()
+    expect(c.locator('.live-alert')).to_contain_text('Son durağa geldi', timeout=12000)
+    expect(c.locator('.live-head')).to_contain_text('şu an ekrana bakıyor')
+    expect(c.locator('.live-list li.cur')).to_contain_text('Son durak')
+    shot(c, '17a-live-tracking')
+    r.click('text=Vardım'); r.click('text=Son sürprize geç')
+    expect(c.locator('.live-alert.done')).to_contain_text('son sürprizi gördü', timeout=15000)
+    close_sheet(c)
+    expect(r.locator('h1.final-title')).to_have_text('Arkana dön', timeout=15000)
     r.wait_for_function("document.querySelector('.polaroid img')?.naturalWidth > 0")
     shot(r, '17-recipient-final')
     r.click('text=Hikâyemizi gör')

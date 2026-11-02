@@ -1,0 +1,26 @@
+/* Gece: koyu mor-lacivert, altın ve gül vurgular */
+:root {
+  --paper: #241730; --paper-2: rgba(255,255,255,.08); --card: rgba(255,255,255,.07);
+  --ink: #fbf0f3; --ink-2: #dcc7d4; --ink-3: #a993a8; --line: rgba(255,255,255,.15);
+  --rose: #e6738f; --rose-2: #f08aa3; --rose-soft: rgba(230,115,143,.18); --gold: #e8b866;
+  --ok: #7fd3a8; --ok-soft: rgba(127,211,168,.14); --warn: #f2bd6b; --warn-soft: rgba(242,189,107,.14);
+  --bad: #ff8f8f; --bad-soft: rgba(255,143,143,.14);
+  --shadow: 0 10px 30px rgba(0,0,0,.35); color-scheme: dark;
+}
+body { background: radial-gradient(120% 70% at 15% 0%, #4b2a55 0%, #2b1a37 45%, #160e21 100%) fixed; }
+body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  background-image: radial-gradient(1.5px 1.5px at 20% 30%, rgba(255,255,255,.5), transparent), radial-gradient(1px 1px at 70% 15%, rgba(255,255,255,.45), transparent),
+  radial-gradient(1.2px 1.2px at 85% 60%, rgba(255,255,255,.35), transparent), radial-gradient(1px 1px at 35% 80%, rgba(255,255,255,.3), transparent),
+  radial-gradient(1.3px 1.3px at 55% 45%, rgba(255,255,255,.3), transparent); }
+.card, .tpl, .clue-card { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+input, textarea, select, .seg button, .search-results { background: rgba(255,255,255,.08) !important; color: var(--ink) !important; border-color: var(--line) !important; }
+input::placeholder, textarea::placeholder { color: #9b86a0; }
+.note.rose, .seg button.on, .tpl.on { color: #ffd3dd; }
+.btn.primary { color: #fff; }
+.bottom-bar, .topbar { background: rgba(28,18,38,.8) !important; }
+.section.alt { background: rgba(255,255,255,.04); }
+.phone-mock .screen { background: #241730; }
+.toast { background: #fbf0f3; color: #241730; }
+.brand { color: var(--ink); }
+.polaroid { background: #fffaf3; }
+.polaroid p { color: #2b211e; }

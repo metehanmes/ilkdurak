@@ -1,0 +1,8 @@
+/* Pudra: yumuşak gül kurusu */
+:root {
+  --paper: #f5e1de; --paper-2: #efd2cf; --card: #fff8f6; --line: #e5c3be;
+  --rose: #9a3150; --rose-2: #b44a68; --rose-soft: #f8dde2; --ink: #33201f;
+}
+body { background: linear-gradient(180deg, #f6dedb 0%, #eccacb 100%) fixed; }
+.bottom-bar { background: rgba(245, 225, 222, .92) !important; }
+.section.alt { background: rgba(154, 49, 80, .06); }

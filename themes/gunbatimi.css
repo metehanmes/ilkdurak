@@ -1,0 +1,10 @@
+/* Gün batımı: sıcak şeftaliden güle geçen zemin */
+:root {
+  --paper: #fde4d8; --paper-2: #fbd5cf; --card: #fffaf6; --line: #efc9bf;
+  --rose: #b03a5b; --rose-2: #c95574; --rose-soft: #fbe0e4;
+}
+body { background: linear-gradient(165deg, #ffe0c7 0%, #fcd0cb 40%, #f2bfd2 75%, #e6b5d6 100%) fixed; }
+.topbar { background: transparent; }
+.bottom-bar { background: rgba(253, 228, 216, .9) !important; }
+.section.alt { background: rgba(255, 255, 255, .35); }
+.footer { border-top-color: rgba(176, 58, 91, .18); }

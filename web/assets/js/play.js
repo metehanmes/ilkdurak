@@ -58,6 +58,7 @@ async function boot() {
     P = remoteProvider(testId, true);
   } else if (token === 'ornek' || token === 'demo') {
     P = demoProvider();
+    try { localStorage.removeItem(`ilk.intro.${P.cacheKey}`); } catch { /* yok */ } // örnek her açılışta zarfla başlasın
   } else if (!token || token.length < 10) {
     return screenMessage('Bağlantı eksik', 'Açtığın bağlantı eksik görünüyor. Sana gönderilen mesajdaki bağlantının tamamına dokunduğundan emin ol.');
   } else {
@@ -112,7 +113,7 @@ function frame(children, { dark = false } = {}) {
         h('button', { onclick: async (e) => { await busy(e.currentTarget, async () => { await P.reset(); try { localStorage.removeItem(introKey()); } catch {} await load(); }); } }, 'Baştan başlat'),
         h('button', { onclick: () => { location.href = `hazirla.html#${testId}`; } }, 'Düzenlemeye dön'))));
   }
-  if (P && P.demo && !params.has('gomulu')) {
+  if (P && P.demo && !params.has('gomulu') && !window.ILK_EMBED) {
     app.appendChild(h('div', { class: 'test-bar' },
       h('span', null, 'Örnek yolculuk · gerçek bir sürprizin nasıl göründüğünü dene'),
       h('button', { onclick: () => { location.href = 'index.html'; } }, 'Ana sayfa')));
